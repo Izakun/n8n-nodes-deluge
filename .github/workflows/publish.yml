@@ -23,7 +23,7 @@ jobs:
           node-version: 20
           registry-url: 'https://registry.npmjs.org'
 
-      - run: npm ci --ignore-scripts
+      - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm run build
       - run: npm run lint
 
