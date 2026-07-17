@@ -27,7 +27,7 @@ export class Deluge implements INodeType {
 	description: INodeTypeDescription = {
 		displayName: 'Deluge',
 		name: 'deluge',
-		icon: { light: 'file:deluge.svg', dark: 'file:deluge.svg' },
+		icon: { light: 'file:deluge.svg', dark: 'file:deluge.dark.svg' },
 		group: ['transform'],
 		version: 1,
 		subtitle: '={{$parameter["operation"]}}',
