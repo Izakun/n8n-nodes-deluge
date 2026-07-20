@@ -1,4 +1,4 @@
-import { ICredentialType, INodeProperties } from 'n8n-workflow';
+import { ICredentialTestRequest, ICredentialType, INodeProperties } from 'n8n-workflow';
 
 export class DelugeApi implements ICredentialType {
 	name = 'delugeApi';
@@ -30,4 +30,28 @@ export class DelugeApi implements ICredentialType {
 			description: 'Deluge Web UI password',
 		},
 	];
+
+	// Deluge Web JSON-RPC: auth.login returns { result: true } on success.
+	test: ICredentialTestRequest = {
+		request: {
+			method: 'POST',
+			baseURL: '={{$credentials.baseUrl}}',
+			url: '/json',
+			body: {
+				id: 1,
+				method: 'auth.login',
+				params: ['={{$credentials.password}}'],
+			},
+		},
+		rules: [
+			{
+				type: 'responseSuccessBody',
+				properties: {
+					key: 'result',
+					value: false,
+					message: 'Login failed — check the Deluge Web UI password.',
+				},
+			},
+		],
+	};
 }
