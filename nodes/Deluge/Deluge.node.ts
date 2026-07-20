@@ -75,7 +75,7 @@ export class Deluge implements INodeType {
 				}
 
 				// Deluge uses a cookie session: log in, then reuse the Set-Cookie value.
-				const login = await this.helpers.httpRequest({
+				const login = await this.helpers.httpRequestWithAuthentication.call(this, 'delugeApi', {
 					method: 'POST' as IHttpRequestMethods,
 					baseURL,
 					url: '/json',
@@ -90,7 +90,7 @@ export class Deluge implements INodeType {
 					.filter(Boolean)
 					.join('; ');
 
-				const result = (await this.helpers.httpRequest({
+				const result = (await this.helpers.httpRequestWithAuthentication.call(this, 'delugeApi', {
 					method: 'POST' as IHttpRequestMethods,
 					baseURL,
 					url: '/json',
