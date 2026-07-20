@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-deluge",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "n8n community node for Deluge (BitTorrent client) via its JSON-RPC API",
   "keywords": [
     "n8n-community-node-package",

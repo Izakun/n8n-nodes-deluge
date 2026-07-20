@@ -45,6 +45,14 @@ export class Deluge implements INodeType {
 				noDataExpression: true,
 				options: [
 					{ name: 'Get Config', value: 'getConfig', action: 'Get the configuration' },
+					{ name: 'Get Filter Tree', value: 'getFilterTree', action: 'Get the filter tree' },
+					{ name: 'Get Free Space', value: 'getFreeSpace', action: 'Get the free disk space' },
+					{
+						name: 'Get Libtorrent Version',
+						value: 'getLibtorrentVersion',
+						action: 'Get the libtorrent version',
+					},
+					{ name: 'Get Session State', value: 'getSessionState', action: 'Get the session state' },
 					{ name: 'Get Torrents', value: 'getTorrents', action: 'Get many torrents' },
 				],
 				default: 'getTorrents',
@@ -56,8 +64,12 @@ export class Deluge implements INodeType {
 		const items = this.getInputData();
 		const returnData: INodeExecutionData[] = [];
 
-		const RPC_BY_OP: Record<string, { method: string; params: unknown[] }> = {
+		const OP: Record<string, { method: string; params: unknown[] }> = {
 			getConfig: { method: 'core.get_config', params: [] },
+			getFilterTree: { method: 'core.get_filter_tree', params: [] },
+			getFreeSpace: { method: 'core.get_free_space', params: [] },
+			getLibtorrentVersion: { method: 'core.get_libtorrent_version', params: [] },
+			getSessionState: { method: 'core.get_session_state', params: [] },
 			getTorrents: { method: 'core.get_torrents_status', params: [{}, TORRENT_FIELDS] },
 		};
 
@@ -67,8 +79,8 @@ export class Deluge implements INodeType {
 				const baseURL = (credentials.baseUrl as string).replace(/\/+$/, '');
 				const operation = this.getNodeParameter('operation', i) as string;
 
-				const rpc = RPC_BY_OP[operation];
-				if (!rpc) {
+				const op = OP[operation];
+				if (!op) {
 					throw new NodeOperationError(this.getNode(), `Unsupported operation: ${operation}`, {
 						itemIndex: i,
 					});
@@ -90,25 +102,50 @@ export class Deluge implements INodeType {
 					.filter(Boolean)
 					.join('; ');
 
-				const result = (await this.helpers.httpRequestWithAuthentication.call(this, 'delugeApi', {
-					method: 'POST' as IHttpRequestMethods,
-					baseURL,
-					url: '/json',
-					headers: { Cookie: cookie },
-					body: { method: rpc.method, params: rpc.params, id: 2 },
-					json: true,
-				} as IHttpRequestOptions)) as IDataObject;
+				let id = 2;
+				const rpc = (method: string, params: unknown[]) =>
+					this.helpers.httpRequestWithAuthentication.call(this, 'delugeApi', {
+						method: 'POST' as IHttpRequestMethods,
+						baseURL,
+						url: '/json',
+						headers: { Cookie: cookie },
+						body: { method, params, id: id++ },
+						json: true,
+					} as IHttpRequestOptions) as Promise<IDataObject>;
 
-				const data = result?.result as IDataObject;
-				if (operation === 'getTorrents' && data && typeof data === 'object') {
-					for (const [hash, torrent] of Object.entries(data)) {
-						returnData.push({
-							json: { hash, ...(torrent as IDataObject) },
-							pairedItem: { item: i },
-						});
+				// The Web UI must be connected to a daemon before core.* methods work.
+				const connected = (await rpc('web.connected', [])).result;
+				if (!connected) {
+					const hosts = (await rpc('web.get_hosts', [])).result as unknown[];
+					const first = Array.isArray(hosts) && hosts.length ? (hosts[0] as unknown[]) : undefined;
+					const hostId = first ? (first[0] as string) : undefined;
+					if (hostId) {
+						await rpc('web.connect', [hostId]);
 					}
+				}
+
+				const result = await rpc(op.method, op.params);
+				if (result?.error) {
+					throw new NodeApiError(this.getNode(), result as JsonObject, {
+						itemIndex: i,
+						message: (result.error as IDataObject)?.message as string,
+					});
+				}
+				const data = result?.result;
+
+				if (
+					operation === 'getTorrents' &&
+					data &&
+					typeof data === 'object' &&
+					!Array.isArray(data)
+				) {
+					for (const [hash, torrent] of Object.entries(data as IDataObject)) {
+						returnData.push({ json: { hash, ...(torrent as IDataObject) }, pairedItem: { item: i } });
+					}
+				} else if (data && typeof data === 'object' && !Array.isArray(data)) {
+					returnData.push({ json: data as IDataObject, pairedItem: { item: i } });
 				} else {
-					returnData.push({ json: (data ?? result) as IDataObject, pairedItem: { item: i } });
+					returnData.push({ json: { result: data } as IDataObject, pairedItem: { item: i } });
 				}
 			} catch (error) {
 				if (this.continueOnFail()) {
